@@ -1,5 +1,4 @@
 #%%
-import numpy as np
 import pandas as pd
 #%%
 closing_prices = pd.read_csv('../Data/data.csv')
@@ -17,13 +16,18 @@ for column in closing_prices.columns:
 # Create a new column for the date in datetime format
 closing_prices['Date'] = pd.to_datetime(closing_prices['Date'])
 #%%
-# Split the data into train and test sets
-test_size = 0.2
-test_split = int(len(closing_prices) * test_size)
-train_set = closing_prices.iloc[test_split:]
-test_set = closing_prices.iloc[:test_split]
-#%%
-# Save the train and test sets
-train_set.to_csv('../Data/train.csv', index=False)
-test_set.to_csv('../Data/test.csv', index=False)
-# %%
+# Split the data into train, validation and test sets
+train_fraction = 0.6
+validation_fraction = 0.2
+test_fraction = 0.2
+
+train_cutoff = int(len(closing_prices) * train_fraction)
+validation_cutoff = int(len(closing_prices) * (train_fraction + validation_fraction))
+
+train_data = closing_prices.iloc[:train_cutoff]
+validation_data = closing_prices.iloc[train_cutoff:validation_cutoff]
+test_data = closing_prices.iloc[validation_cutoff:]
+
+train_data.to_csv('../Data/train.csv', index=False)
+validation_data.to_csv('../Data/validation.csv', index=False)
+test_data.to_csv('../Data/test.csv', index=False)

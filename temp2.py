@@ -223,3 +223,17 @@ dataset = replay_buffer.as_dataset(sample_batch_size=batch_size, num_steps=2, nu
     
     # def get_data(self):
     #     return self.portfolio_values, self.dates
+
+
+
+
+#     # ------------------- Save Policy -------------------
+# policy_dir = os.path.join(os.getcwd(), 'Saved_Policies')
+
+# tf_policy_saver = policy_saver.PolicySaver(agent.policy)
+# tf_policy_saver.save(policy_dir)
+
+# # %%
+# # ------------------- Load Policy -------------------
+# saved_policy = tf.saved_model.load(policy_dir)
+# avg_return = compute_avg_return(test_env, saved_policy.policy, num_eval_episodes)

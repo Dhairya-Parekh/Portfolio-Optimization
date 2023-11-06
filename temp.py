@@ -1,12 +1,15 @@
 #%%
 # ------------------- Imports -------------------
+import os
 import gym
+import time
+import pickle
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tf_agents.utils import common
 from tf_agents.trajectories import trajectory
-from tf_agents.policies import random_tf_policy
+from tf_agents.policies import random_tf_policy, policy_saver
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.environments import suite_gym, tf_py_environment
 from tf_agents.agents.ddpg import actor_network, critic_network, ddpg_agent
@@ -18,9 +21,9 @@ HOLDING_PERIOD = 1
 # ------------------- Environment -------------------
 class SampleEnvironment(gym.Env):
 
-    def __init__(self, filepath, is_train=True):
+    def __init__(self, filepath, type):
         closing_prices = pd.read_csv(filepath)
-        print(f"This is {'Train' if is_train else 'Test'} Environment with {len(closing_prices)} rows and {len(closing_prices.columns)} columns")
+        print(f"This is {type} Environment with {len(closing_prices)} rows and {len(closing_prices.columns)} columns")
         closing_prices.sort_values(by=['Date'], inplace=True)
         closing_prices.dropna(inplace=True)
         closing_prices.reset_index(drop=True, inplace=True)
@@ -43,7 +46,7 @@ class SampleEnvironment(gym.Env):
         self.portfolio_values_log = np.array([1])
         self.dates_log = np.array([self.dates[FITTING_PERIOD-1]])
         observation = self.returns_df.iloc[:FITTING_PERIOD].values.T
-        print(f"Observation shape: {observation.shape}, index: {0} - {FITTING_PERIOD-1}")
+        # print(f"Observation shape: {observation.shape}, index: {0} - {FITTING_PERIOD-1}")
         return observation
     
     def step(self, action):
@@ -64,7 +67,7 @@ class SampleEnvironment(gym.Env):
         self.state = [current_index, portfolio_values[-1]]
         # Calculate the observation = the returns for the fitting period
         observation = self.returns_df.iloc[current_index-FITTING_PERIOD:current_index].values.T
-        print(f"Observation shape: {observation.shape}, index: {current_index-FITTING_PERIOD} - {current_index-1}")
+        # print(f"Observation shape: {observation.shape}, index: {current_index-FITTING_PERIOD} - {current_index-1}")
         # Calculate the reward = portfolio return for the holding period
         reward = cumulative_return
         # Calculate the done flag = whether the new state is the last possible date i.e. adding the holding period to the current index of state exceeds the length of the returns dataframe
@@ -80,16 +83,17 @@ gym.envs.registration.register(
     id='Env-v1',
     entry_point=f'{__name__}:SampleEnvironment',
 )
-train_env = tf_py_environment.TFPyEnvironment(suite_gym.load('Env-v1', gym_kwargs={'filepath': './Data/train.csv'}))
-test_env = tf_py_environment.TFPyEnvironment(suite_gym.load('Env-v1', gym_kwargs={'filepath': './Data/test.csv', 'is_train': False}))
+train_env = tf_py_environment.TFPyEnvironment(suite_gym.load('Env-v1', gym_kwargs={'filepath': './Data/train.csv', 'type': 'Training'}))
+val_env = tf_py_environment.TFPyEnvironment(suite_gym.load('Env-v1', gym_kwargs={'filepath': './Data/validation.csv', 'type': 'Validation'}))
+test_env = tf_py_environment.TFPyEnvironment(suite_gym.load('Env-v1', gym_kwargs={'filepath': './Data/test.csv', 'type': 'Test'}))
 # %%
 # ------------------- Data Related Parameters -------------------
 # How long should training run?
-num_iterations = 10
+num_iterations = 20
 # How often should the program provide an update.
 log_interval = 2
 # How many initial random steps, before training start, to collect initial data.
-initial_collect_steps = 1000
+initial_collect_steps = 100
 # How many steps should we run each iteration to collect  data from.
 collect_steps_per_iteration = 50
 # How much data should we store for training examples.
@@ -97,7 +101,7 @@ replay_buffer_max_length = 100000
 # Batch size for training.
 batch_size = 64
 # How many episodes should the program use for each evaluation.
-num_eval_episodes = 10
+num_eval_episodes = 1
 # How often should an evaluation occur.
 eval_interval = 5
 
@@ -183,8 +187,10 @@ iterator = iter(dataset)
 # ------------------- Training -------------------
 agent.train = common.function(agent.train)
 agent.train_step_counter.assign(0)
-avg_return = compute_avg_return(test_env, agent.policy, num_eval_episodes)
+avg_return = compute_avg_return(val_env, agent.policy, num_eval_episodes)
 returns = [avg_return]
+# Start timer for training
+start = time.time()
 for _ in range(num_iterations):
     print(f"Iteration: {_}")
     collect_data(train_env, agent.collect_policy, replay_buffer, collect_steps_per_iteration)
@@ -195,6 +201,14 @@ for _ in range(num_iterations):
     if step % log_interval == 0:
         print(f'step = {step}: loss = {train_loss}')
     if step % eval_interval == 0:
-        avg_return = compute_avg_return(test_env, agent.policy, num_eval_episodes)
+        avg_return = compute_avg_return(val_env, agent.policy, num_eval_episodes)
         print(f'step = {step}: Average Return = {avg_return}')
         returns.append(avg_return)
+    # End timer for training
+seconds = time.time() - start
+print(f"Training time: {seconds}")
+# %%
+# ------------------- Save Model -------------------
+policy_dir = os.path.join(os.getcwd(), 'SavedModel')
+tf_policy_saver = policy_saver.PolicySaver(agent.policy)
+tf_policy_saver.save(policy_dir)
