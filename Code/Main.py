@@ -1,13 +1,14 @@
-#%%
 import os
+import gym
 import numpy as np
 import pandas as pd
-import cvxopt as opt
+import tensorflow as tf
 import scipy.optimize as sco
 import plotly.graph_objects as go
-from cvxopt import blas, solvers
+from tf_agents.environments import suite_gym, tf_py_environment
+from Environment import MarketEnvironment, FITTING_PERIOD, HOLDING_PERIOD
 
-#%%
+# -------------------- Helper Functions ------------------ #
 def get_returns_df():
     train_closing_prices = pd.read_csv('../Data/train.csv')
     test_closing_prices = pd.read_csv('../Data/test.csv')
@@ -134,16 +135,17 @@ def plot_portfolio_statistics(results, metric, dataset='train'):
     """
     fig = go.Figure()
     if metric in ['Mean Return', 'Volatility', 'Sharpe', 'Max Drawdown', 'Cumulative Return']:
-        x = list(results.keys())
-        y = [results[name][metric] for name in results.keys()]
+        # x = list(results.keys())
+        # y = [results[name][metric] for name in results.keys()]
         fig.add_trace(go.Bar(x=list(results.keys()), y=[results[name][metric] for name in results.keys()], name=metric))
         fig.update_layout(title=metric, xaxis_title='Strategy', yaxis_title=metric)
+        pass
     elif metric in ['Portfolio Value', 'Portfolio Returns']:
         for name in results.keys():
-            x = results[name]['Dates']
-            y = results[name][metric]
+            # x = results[name]['Dates']
+            # y = results[name][metric]
             fig.add_trace(go.Scatter(x=results[name]['Dates'], y=results[name][metric], name=name))
-        fig.update_layout(title=f"{metric} over time", xaxis_title='Date', yaxis_title=metric)
+    fig.update_layout(title=f"{metric} over time", xaxis_title='Date', yaxis_title=metric)
     # Make sure directory exists
     if not os.path.exists(f'../Images/{dataset}'):
         os.makedirs(f'../Images/{dataset}')
@@ -160,45 +162,62 @@ def get_X_Y(df):
     return X, Y
 
 # -------------------- Strategies ------------------ #
+class RandomWeights:
+    def get_weights(self, returns):
+        number_of_instruments = returns.shape[1]
+        weights = np.random.random(number_of_instruments)
+        return weights / np.sum(weights)
 
-def random_weights(returns):    
-    NUMBER_OF_INSTRUMENTS = returns.shape[1]
-    weights = np.random.random(NUMBER_OF_INSTRUMENTS)
-    return weights / np.sum(weights)
+class UniformWeights:
+    def get_weights(self, returns):
+        number_of_instruments = returns.shape[1]
+        return np.ones(number_of_instruments) / number_of_instruments
 
-def uniform_weights(returns):
-    NUMBER_OF_INSTRUMENTS = returns.shape[1]
-    return np.ones(NUMBER_OF_INSTRUMENTS) / NUMBER_OF_INSTRUMENTS
-
-def markowitz_weights(returns):
-    """Currently not working, return uniform weights"""
-    mean_returns = returns.mean(axis=0)
-    cov_matrix = np.cov(returns.T)
-    def neg_sharpe(weights):
+class MarkowitzWeights:
+    def neg_sharpe(self, weights, mean_returns, cov_matrix):
         return -((mean_returns.T @ weights) / np.sqrt(weights.T @ cov_matrix @ weights))
-    results = sco.minimize(neg_sharpe, returns.shape[1]*[1./returns.shape[1],], method='SLSQP', bounds=[(0, 1)]*returns.shape[1], constraints={'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
-    return results['x']
 
-def RL_weights(returns):
-    """Currently not working, return uniform weights"""
-    NUMBER_OF_INSTRUMENTS = returns.shape[1]
-    return np.ones(NUMBER_OF_INSTRUMENTS) / NUMBER_OF_INSTRUMENTS
+    def get_weights(self, returns):
+        number_of_instruments = returns.shape[1]
+        mean_returns = returns.mean(axis=0)
+        cov_matrix = np.cov(returns.T)
+        results = sco.minimize(self.neg_sharpe, number_of_instruments*[1./number_of_instruments,], args=(mean_returns, cov_matrix), method='SLSQP', bounds=[(0, 1)]*number_of_instruments, constraints={'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+        return results['x']
 
-#%%
-# -------------------- Parameters / Constants ------------------ #
+class RLWeights:
+    def __init__(self):
+        self.env = None
+        policy_dir = os.path.join(os.getcwd(), '..', f'Policy_{FITTING_PERIOD}_{HOLDING_PERIOD}')
+        self.policy = tf.saved_model.load(policy_dir)
+    
+    def set_env(self, type):
+        gym.envs.registration.register(
+            id=f'Eval{type}Env',
+            entry_point=f'{__name__}:MarketEnvironment',
+        )
+        env = tf_py_environment.TFPyEnvironment(suite_gym.load(f'Eval{type}Env', gym_kwargs={'type': type}))
+        self.env = env
 
-FITTING_PERIOD = 60
-HOLDING_PERIOD = 1
-strategies = {
-    'Random': random_weights,
-    'Uniform': uniform_weights,
-    'Markowitz': markowitz_weights,
-    'RL': RL_weights
-}
+    def get_weights(self, returns):
+        if self.env is None:
+            print("Error: Environment not set")
+        time_step = self.env.current_time_step()
+        action_step = self.policy.action(time_step)
+        self.env.step(action_step.action)
+        action = action_step.action.numpy()[0]
+        print(action/np.sum(action))
+        return action / np.sum(action)
+        # number_of_instruments = returns.shape[1]
+        # return np.ones(number_of_instruments) / number_of_instruments
 
-#%%
 # -------------------- Main ------------------ #
 if __name__ == '__main__':
+    strategies = {
+        'Random' : RandomWeights(),
+        'Uniform' : UniformWeights(),
+        'Markowitz' : MarkowitzWeights(),
+        'RL' : RLWeights()
+    }
     # Get returns DataFrame
     train_returns_df, test_returns_df = get_returns_df()
     print("Training length:", len(train_returns_df))
@@ -212,12 +231,15 @@ if __name__ == '__main__':
     train_results, test_results = {}, {}
     # Iterate over strategies
     for name, strategy in strategies.items():
+        # print(f"Evaluating {name} strategy")
+        if name == 'RL':
+            strategy.set_env('train')
         # Initialize list to store evaluated portfolio dictionary
         portfolio_metrics = []
         # Iterate over X and Y
         for X, Y in zip(train_X, train_Y):
             returns_X = X.iloc[:, 1:].values
-            weights = strategy(returns_X)
+            weights = strategy.get_weights(returns_X)
             returns_Y = Y.iloc[:, 1:].values
             # Evaluate portfolio
             portfolio_metric = evaluate_portfolio(returns_Y, weights)
@@ -225,12 +247,16 @@ if __name__ == '__main__':
             portfolio_metrics.append(portfolio_metric)
         # Store evaluated portfolio dictionary in results dictionary
         train_results[name] = combine_portfolio_metrics(portfolio_metrics)
+        
+        if name == 'RL':
+            strategy.set_env('test')
         # Initialize list to store evaluated portfolio dictionary
         portfolio_metrics = []
         # Iterate over X and Y
         for X, Y in zip(test_X, test_Y):
             returns_X = X.iloc[:, 1:].values
-            weights = strategy(returns_X)
+            weights = strategy.get_weights(returns_X)
+            # print(weights)
             returns_Y = Y.iloc[:, 1:].values
             # Evaluate portfolio
             portfolio_metric = evaluate_portfolio(returns_Y, weights)
