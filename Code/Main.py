@@ -10,8 +10,8 @@ from Environment import MarketEnvironment, FITTING_PERIOD, HOLDING_PERIOD
 
 # -------------------- Helper Functions ------------------ #
 def get_returns_df():
-    train_closing_prices = pd.read_csv('../Data/train.csv')
-    test_closing_prices = pd.read_csv('../Data/test.csv')
+    train_closing_prices = pd.read_csv('../Data/New-Data/train.csv')
+    test_closing_prices = pd.read_csv('../Data/New-Data/test.csv')
     # Sort DataFrame by date
     train_closing_prices['Date'] = pd.to_datetime(train_closing_prices['Date'])
     train_closing_prices.sort_values(by='Date', inplace=True)
@@ -205,7 +205,7 @@ class RLWeights:
         action_step = self.policy.action(time_step)
         self.env.step(action_step.action)
         action = action_step.action.numpy()[0]
-        print(action/np.sum(action))
+        # print(action/np.sum(action))
         return action / np.sum(action)
         # number_of_instruments = returns.shape[1]
         # return np.ones(number_of_instruments) / number_of_instruments

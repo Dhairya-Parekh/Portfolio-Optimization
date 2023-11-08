@@ -34,5 +34,20 @@ if __name__=='__main__':
     
     # df['CASH'] = np.ones((len(df.index)))
     df.info()
-    df[:len(df)*4//5].to_csv(BASE_PATH+'../train.csv')
-    df[len(df)*4//5:].to_csv(BASE_PATH+'../test.csv')
+    # df[:len(df)*4//5].to_csv(BASE_PATH+'../train.csv')
+    # df[len(df)*4//5:].to_csv(BASE_PATH+'../test.csv')
+    # Split the data into train, validation and test sets
+    train_fraction = 0.6
+    validation_fraction = 0.2
+    test_fraction = 0.2
+
+    train_cutoff = int(len(df) * train_fraction)
+    validation_cutoff = int(len(df) * (train_fraction + validation_fraction))
+
+    train_data = df.iloc[:train_cutoff]
+    validation_data = df.iloc[train_cutoff:validation_cutoff]
+    test_data = df.iloc[validation_cutoff:]
+
+    train_data.to_csv(BASE_PATH+'../train.csv')
+    validation_data.to_csv(BASE_PATH+'../validation.csv')
+    test_data.to_csv(BASE_PATH+'../test.csv')

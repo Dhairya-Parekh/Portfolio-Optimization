@@ -3,18 +3,18 @@ import gym
 import numpy as np
 import pandas as pd
 # ------------------- Environment Parameters -------------------
-FITTING_PERIOD = 60
-HOLDING_PERIOD = 1
+FITTING_PERIOD = 50
+HOLDING_PERIOD = 3
 # ------------------- Environment -------------------
 class MarketEnvironment(gym.Env):
 
     def __init__(self, type):
         if type == 'train':
-            filepath = '../Data/train.csv'
+            filepath = '../Data/New-Data/train.csv'
         elif type == 'test':
-            filepath = '../Data/test.csv'
+            filepath = '../Data/New-Data/test.csv'
         elif type == 'validation':
-            filepath = '../Data/validation.csv'
+            filepath = '../Data/New-Data/validation.csv'
         else:
             raise ValueError(f"Invalid type: {type}")
         self.type = type
