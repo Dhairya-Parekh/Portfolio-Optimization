@@ -22,9 +22,9 @@ val_env = tf_py_environment.TFPyEnvironment(suite_gym.load('TrainingEnv', gym_kw
 
 # ------------------- Data Related Parameters -------------------
 # How long should training run?
-num_iterations = 500
+num_iterations = 3000
 # How often should the program provide an update.
-log_interval = 10
+log_interval = 20
 # How many initial random steps, before training start, to collect initial data.
 initial_collect_steps = 1000
 # How many steps should we run each iteration to collect  data from.
@@ -40,8 +40,8 @@ eval_interval = 50
 
 # ------------------- Agent Related Parameters -------------------
 actor_fc_layer_params = (400, 300)
-critic_obs_fc_layer_params = (300,)
-critic_action_fc_layer_params = (400,)
+critic_obs_fc_layer_params = (400,)
+critic_action_fc_layer_params = (300,)
 critic_joint_fc_layer_params = (300,)
 actor_learning_rate = 1e-3
 critic_learning_rate = 5e-3
@@ -62,6 +62,23 @@ critic_net = critic_network.CriticNetwork(
     action_fc_layer_params=critic_action_fc_layer_params,
     joint_fc_layer_params=critic_joint_fc_layer_params)
 
+# actor_net = actor_rnn_network.ActorRnnNetwork(
+#     train_env.time_step_spec().observation,
+#     train_env.action_spec(),
+#     input_fc_layer_params=actor_fc_layer_params,
+#     # lstm_size=(18,),
+#     # output_fc_layer_params=(100,)
+#     )
+# critic_net = critic_rnn_network.CriticRnnNetwork(
+#     (train_env.time_step_spec().observation, train_env.action_spec()),
+#     observation_fc_layer_params=critic_obs_fc_layer_params,
+#     action_fc_layer_params=critic_action_fc_layer_params,
+#     joint_fc_layer_params=critic_joint_fc_layer_params,
+#     lstm_size=(100,),
+#     # output_fc_layer_params=(100,)
+#     )
+
+
 agent = ddpg_agent.DdpgAgent(
     train_env.time_step_spec(),
     train_env.action_spec(),
@@ -74,7 +91,7 @@ agent = ddpg_agent.DdpgAgent(
     target_update_tau=target_update_tau,
     target_update_period=target_update_period,
     dqda_clipping=None,
-    td_errors_loss_fn=tf.compat.v1.losses.huber_loss,
+    # td_errors_loss_fn=tf.compat.v1.losses.huber_loss,
     gamma=gamma,
     reward_scale_factor=reward_scale_factor,
     gradient_clipping=gradient_clipping

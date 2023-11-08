@@ -184,6 +184,20 @@ class MarkowitzWeights:
         results = sco.minimize(self.neg_sharpe, number_of_instruments*[1./number_of_instruments,], args=(mean_returns, cov_matrix), method='SLSQP', bounds=[(0, 1)]*number_of_instruments, constraints={'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
         return results['x']
 
+class SemiVariationalWeights:
+    def neg_sharpe(self, weights, mean_returns, cov_matrix):
+        return -((mean_returns.T @ weights) / np.sqrt(weights.T @ cov_matrix @ weights))
+    
+    def get_weights(self, returns):
+        number_of_instruments = returns.shape[1]
+        mean_returns = returns.mean(axis=0)
+        X = returns - mean_returns
+        X = X*(returns < 0)
+        fact = X.shape[0] - 1
+        semi_cov_matrix = np.dot(X.T, X.conj()) / fact
+        results = sco.minimize(self.neg_sharpe, number_of_instruments*[1./number_of_instruments,], args=(mean_returns, semi_cov_matrix), method='SLSQP', bounds=[(0, 1)]*number_of_instruments, constraints={'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+        return results['x']
+
 class RLWeights:
     def __init__(self):
         self.env = None
@@ -213,10 +227,11 @@ class RLWeights:
 # -------------------- Main ------------------ #
 if __name__ == '__main__':
     strategies = {
-        'Random' : RandomWeights(),
-        'Uniform' : UniformWeights(),
+        # 'Random' : RandomWeights(),
+        # 'Uniform' : UniformWeights(),
         'Markowitz' : MarkowitzWeights(),
-        'RL' : RLWeights()
+        'RL' : RLWeights(),
+        'Semi-Variational' : SemiVariationalWeights()
     }
     # Get returns DataFrame
     train_returns_df, test_returns_df = get_returns_df()

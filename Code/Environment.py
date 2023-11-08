@@ -3,7 +3,7 @@ import gym
 import numpy as np
 import pandas as pd
 # ------------------- Environment Parameters -------------------
-FITTING_PERIOD = 50
+FITTING_PERIOD = 90
 HOLDING_PERIOD = 3
 # ------------------- Environment -------------------
 class MarketEnvironment(gym.Env):
@@ -53,7 +53,10 @@ class MarketEnvironment(gym.Env):
     
     def step(self, action):
         # Make sure the action is valid, i.e. the sum of weights is 1
-        weights = action / np.sum(action)
+        if np.sum(action) < 1e-3:
+            weights = np.ones((self.num_assets,)) / self.num_assets
+        else:
+            weights = action / np.sum(action)
         current_index = self.state[0]
         # Given action as portfolio weights, calculate the portfolio return for the holding period
         holding_returns = self.returns_df.iloc[current_index:current_index+HOLDING_PERIOD].values

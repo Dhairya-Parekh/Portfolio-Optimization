@@ -39,14 +39,15 @@ if __name__=='__main__':
     # Split the data into train, validation and test sets
     train_fraction = 0.6
     validation_fraction = 0.2
-    test_fraction = 0.2
+    test_fraction = 0.18
 
     train_cutoff = int(len(df) * train_fraction)
     validation_cutoff = int(len(df) * (train_fraction + validation_fraction))
+    test_cutoff = int(len(df) * (train_fraction + validation_fraction + test_fraction))
 
     train_data = df.iloc[:train_cutoff]
     validation_data = df.iloc[train_cutoff:validation_cutoff]
-    test_data = df.iloc[validation_cutoff:]
+    test_data = df.iloc[validation_cutoff:test_cutoff]
 
     train_data.to_csv(BASE_PATH+'../train.csv')
     validation_data.to_csv(BASE_PATH+'../validation.csv')
